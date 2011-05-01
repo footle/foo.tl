@@ -1,0 +1,278 @@
+Fun with bitmasks
+----------------------------
+Have you ever noticed how some PHP functions accept a range of options in the form 
+of constants separated (most often) by pipes (i.e. "|")? Have you ever wondered what 
+on earth is going on? The answer is lays in binary numbers, and that pipe you use to 
+chain the constants together: the bitwise OR operator.
+
+### The OR operation
+Like many things, the bitwise OR operation is best explained with an example. Let's take
+the binary representation of two numbers: 2 and 8.
+
+    2: 0010
+    8: 1000
+
+And OR them together:
+
+    2:  0010
+    8:  1000
+    -------- OR
+    10: 1010
+
+It might look like the numbers have just been added together, but that's not quite 
+accurate. To see why, let's try ORing 3 and 2:
+
+    3: 0011
+    2: 0010
+    ------- OR
+    3: 0011
+
+Hmm; not 5. Told you so. Each *bit* of the first binary number is being compared
+with the corresponding bit in the second number; if either (or both) of them is
+a "1", that bit in the resulting number is a "1" too. 
+
+It is *as though* it's performing a regular boolean OR operation on each bit of the 
+numbers in turn. I guess you *could* try to explain it like this:
+
+    <?php
+    // The first bit
+    if ($numberOne['firstBit'] || $numberTwo['firstBit']){
+      $result['firstBit'] = 1;
+    } else {
+      $result['firstBit'] = 0;
+    } 
+
+    // The second bit
+    if ($numberOne['secondBit'] || $numberTwo['secondBit']){
+      $result['secondBit'] = 1;
+    } else {
+      $result['secondBit'] = 0;
+    } 
+
+    /* And so on, until all the bits have been checked... */
+
+Bare in mind that I am trying to demonstrate the outcome of the operation rather 
+than how it is actually calculated behind the scenes. *Technically* you *could*
+represent your binary numbers as arrays and write similar code, but that would
+be tedious and stupid. It makes much more sense to rely on PHP's built-in
+operators:
+
+    <?php
+    echo 2 | 8; // 10
+    echo 3 | 2; // 3
+
+Because this operation uses each bit individually, we call it a "bitwise" operation. 
+Any number we use in such an operation is known as a "bitmask", hence the title of 
+this article :-)
+
+### Oh you crazy constants
+Using numbers directly is confusing, it makes much more sense to use constants to
+represent them. The constants that you pass into functions such as error\_reporting() 
+do just that:
+
+    <?php
+    echo E_ERROR;   // 1
+    echo E_WARNING; // 2
+    echo E_PARSE;   // 4
+    echo E_NOTICE;  // 8
+
+You may notice that these numbers have something in common: they are all place-values
+in binary. Like in decimal, where the place-values are 1, 10, 100, 1000 etc: the 
+place-values in binary are 1, 2, 4, 8, 16, 32, and so on. 
+
+As a result, each of these constants only has one bit turned "on" when in binary form:
+
+    <?php
+    echo decbin(E_ERROR);   //    1
+    echo decbin(E_WARNING); //   10
+    echo decbin(E_PARSE);   //  100
+    echo decbin(E_NOTICE);  // 1000
+
+This choice of numbers is actually pretty important; it means that when the bitwise OR 
+operation is done, no two bits "clash"; each number can represent a distinct option.
+
+I find it handy to think of the bits as "switches". When you perform a bitwise OR 
+operation, you're kind of saying: *"turn these switches on; the ones that are switched
+on in these numbers"*.
+
+So when you do this:
+
+    <?php
+    error_reporting(E_ERROR | E_WARNING | E_NOTICE);
+
+You're actually saying this:
+
+    <?php
+    error_reporting(bindec('1011'));
+
+Or this:
+  
+    <?php
+    error_reporting(11);
+
+It's a damn good idea to use the constants though. They tell anyone reading your code
+what you're trying to do, rather than how you're doing it. "E\_NOTICE" makes much more 
+sense to the casual reader than "8".
+
+### The AND operation
+If you're wondering how error\_reporting() uses this input, you've come to the right 
+place. It uses a second bitwise operator: the bitwise AND (or "&" in PHP talk). 
+Here comes another one of those examples:
+
+    3: 0011
+    2: 0010
+    ------- AND
+    2: 0010
+
+I'm pretty sure you've spotted what's happened here; but don't worry if you haven't. 
+Just like the bitwise OR operation, we look at each bit in turn, but this time instead 
+of doing a boolean OR operation with each bit we do a boolean AND operation. Simple, 
+huh? Look at another example just to make sure you've got it: 
+
+    10: 1010
+    11: 1011
+    -------- AND
+    10: 1010
+
+This operation is how error\_reporting() takes a slightly cryptic input like "11" and
+figures out what you were trying to tell it. Let's write our own pseudo-version of 
+error\_reporting() to demonstrate how.
+
+    <?php
+    function footle_reporting($bitmask){
+      if (E_ERROR & $bitmask){
+        echo "Turned on E_ERROR level reporting";
+      }
+      if (E_WARNING & $bitmask){
+        echo "Turned on E_WARNING level reporting";
+      }
+      if (E_PARSE & $bitmask){
+        echo "Turned on E_PARSE level reporting";
+      }
+      if (E_NOTICE & $bitmask){
+        echo "Turned on E_NOTICE level reporting";
+      }
+    }
+
+    footle_reporting(E_ERROR | E_PARSE);
+    // Output: 
+    //   Turned on E_ERROR level reporting
+    //   Turned on E_PARSE level reporting
+
+When you perform a bitwise AND operation you're essentially saying *"give me the 'switches' that 
+are turned 'on' in both of these binary numbers"*. If there are any "switches" turned "on" in both
+numbers, then the result will be "truthy" (i.e. a positive integer).
+
+
+### Why?
+There are a bunch of advantages to this approach of specifying options. The main ones for me are:
+
+  1. Any number of options can be specified
+  2. The options can be specified in any order
+  3. You can have "shortcut" numbers defined in constants
+  4. You can do clever stuff with the [other bitwise operators](http://php.net/manual/en/language.operators.bitwise.php)
+
+The first two are pretty self-explanatory; but what about the last two?
+
+#### Shortcuts
+It would be pretty tedious if when you wanted to display all types of error you had to list out
+all of the different constants. So PHP provides a shortcut, and you've probably seen it around:
+
+    <?php
+    error_reporting(E_ALL);
+
+How the hell does that work? Just what is the value of E\_ALL?
+
+    <?php
+    echo E_ALL; // 30719
+
+30719? Why? Would it be a *bit* more clear if I spoke like a robot (in binary)?
+
+    <?php
+    echo decbin(E_ALL); // 111011111111111
+
+Would you look at that! (Almost) all of the bits are turned on. If you did a bitwise AND operation
+with E\_ALL and any of the E\_\* constants we looked at earlier you would get a truthy result. 
+
+If you're wondering why not *all* of the bits are turned on, it's because E\_ALL isn't actually
+all that well named; it doesn't include E\_STRICT level errors. If you really wanted *all*
+errors you could use:
+
+    <?php
+    error_reporting(E_ALL | E_STRICT);
+
+
+#### Clever stuff
+The shortcut constants are really handy, but what if you wanted to display all errors apart from 
+E\_NOTICE level errors? You're back to writing out all of the constants again, right? ...right?
+
+    <?php
+    error_reporting(E_ALL & ~E_NOTICE);
+
+What the hell is *that*?! That innocent looking tilde is the bitwise NOT operator. It "inverts" a 
+binary number; all the bits that are "on" in a number get turned "off", and all those that are
+turned "off" get turned "on". 
+
+    <?php
+    echo decbin(E_NOTICE);  //    1000 
+    echo decbin(~E_NOTICE); // ...0111
+    // Note: I've stripped a bunch of leading "1"s off the output 
+    //       of decbin(~E_NOTICE) and only showed the important bit. 
+    //       Because I'm dealing with 64 bit numbers there's 60 
+    //       implied zeros before that "1000" that decbin(E_NOTICE) 
+    //       returns.
+
+Told you so.
+
+When we perform a bitwise AND operation on E\_ALL and ~E\_NOTICE, the result is that all of the bits
+turned on in E\_ALL are turned on, apart from that one bit that is turned on in E\_NOTICE. Don't
+believe me? I'll prove it:
+
+    <?php
+    echo decbin(E_NOTICE);          //    000000000001000
+    echo decbin(~E_NOTICE);         // ...111111111110111
+    echo decbin(E_ALL);             //    111011111111111
+    echo decbin(E_ALL & ~E_NOTICE); //    111011111110111
+
+    //Note: I striped some "1"s off the beginning of the output
+    //      of decbin(~E_NOTICE) again :-)
+
+Notice that two bits are turned off in the output; one of them is for E\_STRICT (like we mentioned
+earlier) and the other is for ~E\_NOTICE. 
+
+#### Bonus: the XOR operator
+It was [suggested](http://www.reddit.com/r/PHP/comments/h0rbp/i_wrote_about_using_bitmasks_in_php_please/c1rq3oe)
+that I also mention the XOR (i.e. eXclusive OR) operator. PHP uses "^" as the XOR operator. XOR is a bit 
+like OR, but with one exception: if both arguments are true, then the result is false. Here's a truth
+table comparing a few of the operators to show what I mean:
+
+    A B    A|B  A&B  A&~B A^B
+    -------------------------
+    0 0    0    0    0    0
+    0 1    1    0    0    1
+    1 0    1    0    1    1
+    1 1    1    1    0    0
+
+I know "&~" is actually two operators, but for this truth table it makes sense to treat them as one.
+
+I like to think of the XOR operator "flipping" any bits in the first number that correspond to any
+bits in the second number that are turned "on". Like this:
+
+    00001111
+    10101010
+    -------- XOR
+    10100101
+
+It turns out that we can use this to our advantage, and use the XOR operator in place of an AND
+and then a NOT operator in many situations:
+
+    <?php
+    echo decbin(E_ALL);             // 111011111111111
+    echo decbin(E_NOTICE);          // 000000000001000
+    echo decbin(E_ALL & ~E_NOTICE); // 111011111110111
+    echo decbin(E_ALL ^ E_NOTICE);  // 111011111110111
+    // ^^^ Look! The last two are the same ^_^
+
+Be aware that you can't *always* swap "&~" out for "^" and have things work the same way; refer 
+back to the truth table to see how they differ: a bit set to "off" in the first number, but set 
+to "on" in the second will result in a bit set to "on" using XOR and "off" using an AND and a NOT.

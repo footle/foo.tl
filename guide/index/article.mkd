@@ -1,0 +1,9 @@
+This is a collection of things I've found myself explaining to beginner and 
+intermediate level PHP developers. If you fall into such a category, you
+might find some of them useful. 
+
+If I've made a mistake, explained something badly, or you want me to explain 
+something else: drop me an email on **php@foo.tl**
+
+1. [Dealing with database inputs](/guide/dealing-with-database-inputs/)
+2. [Fun with bitmasks](/guide/fun-with-bitmasks/)

@@ -1,0 +1,145 @@
+Dealing with database inputs
+----------------------------
+
+### Using prepared statements
+mysql\_real\_escape\_string is a long function name to type. It's no wonder people
+forget to escape their database inputs so often. Prepared statements are an easy 
+and secure alternative. By giving the database driver knowledge of the context in 
+which a variable is used, it is able to escape them automatically. 
+
+[PDO](http://php.net/pdo) is my favourite way to interface with databases; it provides 
+a uniform interface for many different database drivers and - very importantly - makes 
+using prepared statements a breeze.
+
+#### Example usage
+All of the following examples use a table that can be created as follows:
+
+    <?php
+    //Create a new PDO object, using the MySQL database 'footle'
+    $db = new \PDO('mysql:dbname=footle;host=127.0.0.1', $username, $password);
+
+    //Create a table for some people to live in
+    $db->query('create table people (
+      id        int auto_increment primary key, 
+      firstname varchar(64), 
+      lastname  varchar(64), 
+      age       int
+    )');
+
+The first thing you're likely to want to do with any database table is insert some 
+records based on some form of user input ($\_GET parameters, let's say). That's where 
+prepared statements come in.  If we were sticking to "old-school" techniques, we 
+would probably do something like this:
+
+    <?php
+    //Pretend we're connected to a MySQL database already
+    $firstname = mysql_real_escape_string($_GET['firstname']);
+    $lastname  = mysql_real_escape_string($_GET['lastname']);
+    $age       = mysql_real_escape_string($_GET['age']);
+
+    //We had to do a lot of manual escaping to make this step safe
+    mysql_query("
+      insert into people(firstname, lastname, age)
+      values('{$firstname}', '{$lastname}', '{$age}')
+    ");
+
+Urgh. I don't like that very much. Here's an equivalent piece of code using PDO's 
+prepared statements and that PDO object we created earlier:
+
+    <?php
+    //Prepare a new statement. PDO::prepare returns a PDOStatement object
+    $addPerson = $db->prepare('
+      insert into people(firstname, lastname, age) 
+      values(:firstname, :lastname, :age)
+    ');
+
+    //Execute the prepared statement, passing in the variables we want to use
+    $addPerson->execute(array(
+      ':firstname' => $_GET['firstname'],   
+      ':lastname'  => $_GET['lastname'],  
+      ':age'       => $_GET['age']
+    ));
+
+Note the use of ":fieldname" as a placeholder in the query and in the array passed to "execute". 
+This method may not look all that much better, but one main difference becomes clear when we need 
+to add a second person:
+
+    <?php
+    //$addPerson is just the same PDOStatement object from the last example
+    $addPerson->execute(array(
+      ':firstname' => 'Footle',   
+      ':lastname'  => 'McBootle',  
+      ':age'       => 8
+    ));
+
+Wait just one minute there! You can just reuse the same object to add another record?! Damn 
+right you can. You can re-use the [PDOStatement](http://php.net/pdostatement) that PDO::prepare
+returns as many times as you want. 
+
+The main advatage to this technique however, is that because the database driver is aware that a 
+variable is being used in the query, it's escaped for you automatically. So long, SQL injection!
+
+#### Non-named placeholders
+
+You don't *have* to name your placeholders if you don't want to. Instead of using ":fieldname"
+you can just use a "?". This is handy if you don't know the field names ahead of time, or if 
+you're a lazy typist.
+
+For example, to add my younger brother Mootle into the people table I could do this:
+
+    <?php
+    $addPerson = $db->prepare('
+      insert into people values(?, ?, ?, ?)
+    ');
+    $addPerson->execute(array(
+      null, 'Mootle', 'McBootle', 7
+    ));
+
+
+### Bonus: selecting records with PDO
+
+If you've never used PDO and want to take advantage of it's prepared statements and other goodness, 
+you probably want to know how to perform other basic operations too; like selecting records. 
+
+Rather than continuing to waffle on about things, I think this section is best presented as a snippet
+of "old-school" mysql\_\* code, and then an equivalent snippet of code using PDO. Enjoy.
+
+#### mysql\_\*
+    <?php
+    //Connect
+    $mysqlLink = mysql_connect('127.0.0.1', $username, $password);
+    mysql_select_db('footle', $mysqlLink);
+   
+    //Escape
+    $lastname = mysql_real_escape_string($_GET['lastname']);
+
+    //Query
+    $result = mysql_query(
+      "select firstname, age from people where lastname = '{$lastname}'", 
+      $mysqlLink
+    );
+
+    //Display
+    while ($row = mysql_fetch_assoc($result)){
+      echo "{$row['firstname']} - {$row['age']}\n";
+    }
+#### PDO
+    <?php
+    //Connect
+    $db = new \Pdo('mysql:dbname=footle;', $username, $password);
+
+    //Prepare
+    $byLastname = $db->prepare("
+      select firstname, age from people where lastname = :lastname
+    ");
+
+    //Execute
+    $byLastname->execute(array(
+      ':lastname' => $_GET['lastname']
+    ));
+
+    //Display
+    while ($row = $byLastname->fetch(PDO::FETCH_ASSOC)){
+      echo "{$row['firstname']} - {$row['age']}\n";
+    }
+
