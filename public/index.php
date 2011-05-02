@@ -8,13 +8,14 @@ if (!IN_PRODUCTION){
   ini_set('display_errors', 'on');
   ini_set('html_errors', 'on');
 }
+define('ROOT_DIR', realpath(__DIR__.'/../'));
 
 // Markdown won't autoload at the moment; no namespaces etc
-require __DIR__.'/Ftl/Html/Markdown.php';
+require ROOT_DIR.'/Ftl/Html/Markdown.php';
 
 spl_autoload_register(function($class){
   $class = str_replace('\\', '/', ltrim($class, '\\'));
-  require __DIR__."/{$class}.php";
+  require ROOT_DIR."/{$class}.php";
 });
 
 set_exception_handler(function($e){
@@ -24,9 +25,9 @@ set_exception_handler(function($e){
       break;
   }
   $r = new \Ftl\Html\Renderer();
-  $r->render(__DIR__.'/assets/templates/main.php', array(
+  $r->render(ROOT_DIR.'/templates/main.php', array(
     'title'        => 'Oh noes! Waht you doen?!',
-    'subpage'      => __DIR__.'/assets/templates/error.php',
+    'subpage'      => ROOT_DIR.'/templates/error.php',
     'subpageData'  => array(
       'exception' => $e
     ) 
@@ -39,7 +40,8 @@ set_exception_handler(function($e){
 
 $renderer = new \Ftl\Html\Renderer();
 
-$router = new \Ftl\Http\Router($_SERVER['REQUEST_URI']);
+$request = parse_url($_SERVER['REQUEST_URI']);
+$router = new \Ftl\Http\Router($request['path']);
 $router->addRoute(
   array(
     '/', 
@@ -47,23 +49,23 @@ $router->addRoute(
     '/guide/:article'
   ), 
   function($article = 'index') use($renderer){
-    $articleFile = __DIR__."/guide/{$article}/article.mkd";
+    $articleFile = ROOT_DIR."/guide/{$article}/article.mkd";
     if (!file_exists($articleFile)){
       throw new \Exception("That is not an article I have written.", 404);
     }
     $articleContent = file_get_contents($articleFile);
     $lastModified = filemtime($articleFile);
 
-    $manifestFile = __DIR__."/guide/{$article}/manifest.ini";
+    $manifestFile = ROOT_DIR."/guide/{$article}/manifest.ini";
     $title = null;
     if (file_exists($manifestFile)){
       $manifest = parse_ini_file($manifestFile);
       $title = isSet($manifest['title'])? $manifest['title'] : null;
     }
 
-    $renderer->render(__DIR__.'/assets/templates/main.php', array(
+    $renderer->render(ROOT_DIR.'/templates/main.php', array(
       'title'        => $title,
-      'subpage'      => __DIR__.'/assets/templates/article.php',
+      'subpage'      => ROOT_DIR.'/templates/article.php',
       'lastModified' => $lastModified,
       'gaTracking'   => IN_PRODUCTION, //Only track in production
       'subpageData'  => array(
